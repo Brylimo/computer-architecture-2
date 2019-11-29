@@ -39,8 +39,20 @@ static int index_bit(int n) {
 	return cnt-1;
 }
 
-void build_cache() {
-
+void build_cache(cache* targetcache) {
+    int set = 1 << targetcache->s;
+    int way = targetcache->E;
+    cset* son = (cset*)malloc(sizeof(cset) * set);               
+    targetcache->sets = son;
+    for (int i = 0; i < set; i++)
+    {
+	cline* kane = (cline*)malloc(sizeof(cline) * way);
+	for (int j = 0; j < way; j++)
+	{
+	    kane[j].age = j; kane[j].valid = 0; kane[j].modified = 0; kane[j].tag = 0; 
+	}
+	targetcache->sets[i].lines = kane;
+    }
 }
 
 void access_cache() {
@@ -91,13 +103,13 @@ void sdump(int total_reads, int total_writes, int write_backs,
 /* Procedure : xdump                                           */
 /*                                                             */
 /* Purpose   : Dump current cache state                        */
-/* 					                            		       */
-/* Cache Design						                           */
-/*  							                               */
-/* 	    cache[set][assoc][word per block]		               */
-/*                                						       */
-/*      				                        		       */
-/*       ----------------------------------------	           */
+/* 					                       */
+/* Cache Design						       */
+/*  							       */
+/* 	    cache[set][assoc][word per block]		       */
+/*                                			       */
+/*      				                       */
+/*       ----------------------------------------	       */
 /*       I        I  way0  I  way1  I  way2  I                 */
 /*       ----------------------------------------              */
 /*       I        I  word0 I  word0 I  word0 I                 */
@@ -110,7 +122,7 @@ void sdump(int total_reads, int total_writes, int write_backs,
 /*       I        I  word2 I  word2 I  word2 I                 */
 /*       I        I  word3 I  word3 I  word3 I                 */
 /*       ----------------------------------------              */
-/*                              						       */
+/*                              			       */
 /*                                                             */
 /***************************************************************/
 void xdump(cache* L)
@@ -158,8 +170,6 @@ void xdump(cache* L)
 }
 
 
-
-
 int main(int argc, char *argv[]) {
 	int i, j, k;
 	int capacity=1024;
@@ -183,12 +193,11 @@ int main(int argc, char *argv[]) {
 	// parse file
 	char *trace_name = (char*)malloc(32);
 	FILE *fp;
-    char line[16];
-    char *op;
-    uint32_t addr;
+        char line[16];
+        char *op;
+        uint32_t addr;
 
-    /* You can define any variables that you want */
-
+        /* You can define any variables that you want */
 	trace_name = argv[argc-1];
 	if (argc < 3) {
 		printf("Usage: %s -c cap:assoc:block_size [-x] input_trace \n",argv[0]);
@@ -211,7 +220,6 @@ int main(int argc, char *argv[]) {
 			default:
 			printf("Usage: %s -c cap:assoc:block_size [-x] input_trace \n",argv[0]);
 			exit(1);
-
 		}
 	}
 
@@ -220,6 +228,11 @@ int main(int argc, char *argv[]) {
 
     /* TODO: Define a cache based on the struct declaration */
     // simCache = build_cache();
+    simCache.E = way;
+    simCache.s = index_bit(set);
+    simCache.b = index_bit(blocksize);
+    cache* targetcache = &simCache;
+    build_cache(targetcache);
 
 	// simulate
 	fp = fopen(trace_name, "r"); // read trace file
@@ -243,7 +256,7 @@ int main(int argc, char *argv[]) {
         // access_cache()
         // ...
     }
-
+    
     // test example
 	sdump(read, write, writeback, readhit, writehit, readmiss, writemiss);
 	if (xflag){
