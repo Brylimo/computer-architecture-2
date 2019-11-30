@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h> // for getopt()
+#include <math.h>
 
 #define BYTES_PER_WORD 4
 // #define DEBUG
@@ -39,24 +40,99 @@ static int index_bit(int n) {
 	return cnt-1;
 }
 
-void build_cache(cache* targetcache) {
-    int set = 1 << targetcache->s;
-    int way = targetcache->E;
+char* NumToBits (unsigned int num, int len) {
+    char* bits = (char *) malloc(len+1);
+    int idx = len-1, i;
+
+    while (num > 0 && idx >= 0) {
+	if (num % 2 == 1) {
+	    bits[idx--] = '1';
+	} else {
+	    bits[idx--] = '0';
+	}
+	num /= 2;
+    }
+
+    for (i = idx; i >= 0; i--){
+	bits[i] = '0';
+    }
+    
+    return bits;    
+}
+
+void bintonum (char* ptr, char plag[])
+{
+    int decimal = 0, position = 0;
+    int len = strlen(ptr);
+    for (int i = len - 1; i >= 0; i--)
+    {
+	char ch = ptr[i];
+	decimal += (ch - '0') * pow(2, position);
+	position++;
+    }
+    sprintf(plag, "%d", decimal);
+}
+
+void build_cache(cache* cash) {
+    int set = 1 << cash->s;
+    int way = cash->E;
     cset* son = (cset*)malloc(sizeof(cset) * set);               
-    targetcache->sets = son;
+    cash->sets = son;
     for (int i = 0; i < set; i++)
     {
 	cline* kane = (cline*)malloc(sizeof(cline) * way);
 	for (int j = 0; j < way; j++)
 	{
-	    kane[j].age = j; kane[j].valid = 0; kane[j].modified = 0; kane[j].tag = 0; 
+	    kane[j].age = 0; kane[j].valid = 0; kane[j].modified = 0; kane[j].tag = 0; 
 	}
-	targetcache->sets[i].lines = kane;
+	cash->sets[i].lines = kane;
     }
 }
-
-void access_cache() {
-
+// read-hits = 0, write-hits 1, read-misses = 2, write-misses = 3
+int access_cache(char* op, char* tag_r, char* index_r, cache* cash, int* writeback) {    
+    int tag_s = atoi(tag_r), index_s = atoi(index_r);
+    int way = cash->E, pass, cnt = 0;
+    for (int i = 0; i < way; i++)
+    {
+	if (cash->sets[index_s].lines[i].valid == 1 &&
+	    tag_s == cash->sets[index_s].lines[i].tag)
+	{
+	    if (*op == 'R')
+		pass = 0;
+	    else if (*op == 'W')
+	    {
+		cash->sets[index_s].lines[i].modified = 1;
+		pass = 1;
+	    }
+	}
+	else
+	{
+	    cnt++;
+	}
+    }
+    if (cnt == way)
+    {
+	int max = -1, oldest;		
+	for (int i = 0; i < way; i++)
+	{
+	    if (cash->sets[index_s].lines[i].age > max)
+	    {
+		max = cash->sets[index_s].lines[i].age;
+		oldest = i;
+	    }	
+	}
+	for (int i = 0; i < way; i++)
+	{
+	    cash->sets[index_s].lines[i].age++;
+	}
+	cash->sets[index_s].lines[oldest].age = 0; cash->sets[index_s].lines[oldest].valid = 1;
+	cash->sets[index_s].lines[oldest].modified = 0; cash->sets[index_s].lines[oldest].tag = tag_s;
+	if (*op == 'R')
+	    pass = 2;
+	else if (*op == 'W')
+	    pass = 3;
+    }
+    return pass;    
 }
 
 /***************************************************************/
@@ -227,7 +303,6 @@ int main(int argc, char *argv[]) {
 	set = capacity/way/blocksize;
 
     /* TODO: Define a cache based on the struct declaration */
-    // simCache = build_cache();
     simCache.E = way;
     simCache.s = index_bit(set);
     simCache.b = index_bit(blocksize);
@@ -245,8 +320,8 @@ int main(int argc, char *argv[]) {
     /* TODO: Build an access function to load and store data from the file */
     while (fgets(line, sizeof(line), fp) != NULL) {
         op = strtok(line, " ");
-        addr = strtoull(strtok(NULL, ","), NULL, 16);
-
+        addr = strtoull(strtok(NULL, ","), NULL, 16);	
+    
 #ifdef DEBUG
         // You can use #define DEBUG above for seeing traces of the file.
         fprintf(stderr, "op: %s\n", op);
@@ -255,6 +330,37 @@ int main(int argc, char *argv[]) {
         // ...
         // access_cache()
         // ...
+	if (*op == 'R')
+	{
+	    read++;
+	}
+	else
+	{
+	    write++;
+	}
+	char* ptr = NumToBits(addr, 32);
+	char index[32], tag[32], index_r[32], tag_r[32];
+	int k = 0, u = 0, flag;
+	int* writelater = &writeback;
+	for(int i = 32 - (targetcache->b + targetcache->s); i < 32 - targetcache->b; i++, k++)
+	{
+	    index[k] = ptr[i];
+	}
+	for (int i = 0; i < 32 - (targetcache->b + targetcache->s); i++, u++)
+	{
+	    tag[u] = ptr[i];
+	}
+	index[k] = '\0'; tag[u] = '\0';
+	bintonum(tag, tag_r); bintonum(index, index_r);
+	flag = access_cache(op, tag_r, index_r, targetcache, writelater);
+	if (flag == 0)
+	    readhit++;
+	else if (flag == 1)
+	    writehit++;
+	else if (flag == 2)
+	    readmiss++;
+	else if (flag == 3)
+	    writemiss++;	    
     }
     
     // test example

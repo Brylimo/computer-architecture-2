@@ -1,5 +1,5 @@
 sce212cache: main.c
-	gcc -g -O2 $^ -o $@
+	gcc -g -O2 $^ -o $@ -lm
 clean:
 	rm -rf *~sce212cache
 
