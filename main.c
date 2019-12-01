@@ -88,6 +88,7 @@ void build_cache(cache* cash) {
 	cash->sets[i].lines = kane;
     }
 }
+
 // read-hits = 0, write-hits 1, read-misses = 2, write-misses = 3
 int access_cache(char* op, char* tag_r, char* index_r, cache* cash, int* writeback) {    
     int tag_s = atoi(tag_r), index_s = atoi(index_r);
@@ -104,29 +105,72 @@ int access_cache(char* op, char* tag_r, char* index_r, cache* cash, int* writeba
 		cash->sets[index_s].lines[i].modified = 1;
 		pass = 1;
 	    }
+	    for (int j = 0; j < way; j++)
+	    {
+		cash->sets[index_s].lines[j].age++;
+	    }
+	    cash->sets[index_s].lines[i].age = 0;
+	    break;
 	}
 	else
 	{
 	    cnt++;
 	}
     }
+
     if (cnt == way)
     {
-	int max = -1, oldest;		
+	int cntt = 0;
+	// 처음 valid = 0인걸 찾기
 	for (int i = 0; i < way; i++)
 	{
-	    if (cash->sets[index_s].lines[i].age > max)
+	    if (cash->sets[index_s].lines[i].valid == 0)
 	    {
-		max = cash->sets[index_s].lines[i].age;
-		oldest = i;
-	    }	
+		for (int j = 0; j < way; j++)
+		{
+		    cash->sets[index_s].lines[j].age++;
+		}
+		cash->sets[index_s].lines[i].age = 0; cash->sets[index_s].lines[i].valid = 1;
+		cash->sets[index_s].lines[i].tag = tag_s;
+		if (*op == 'R')
+		    cash->sets[index_s].lines[i].modified = 0;
+		else if (*op == 'W')
+		    cash->sets[index_s].lines[i].modified = 1;
+		break;
+	    }
+	    else
+	    {
+		cntt++;
+	    }		
 	}
-	for (int i = 0; i < way; i++)
+
+	// LRU
+	if (cntt == way)
 	{
-	    cash->sets[index_s].lines[i].age++;
+	 int max = -1, oldest;		
+	 for (int i = 0; i < way; i++)
+	 {
+	     if (cash->sets[index_s].lines[i].age > max)
+	     {
+	 	max = cash->sets[index_s].lines[i].age;
+		oldest = i;
+ 	     }	
+	 }
+	 for (int i = 0; i < way; i++)
+	 {
+	     cash->sets[index_s].lines[i].age++;
+	 }
+	 if (cash->sets[index_s].lines[oldest].modified == 1)
+	 {
+	    *writeback += 1;
+	 }
+	 cash->sets[index_s].lines[oldest].age = 0; cash->sets[index_s].lines[oldest].valid = 1;
+	 cash->sets[index_s].lines[oldest].tag = tag_s;
+	 if (*op == 'R')
+	     cash->sets[index_s].lines[oldest].modified = 0;
+	 else if (*op == 'W')
+	     cash->sets[index_s].lines[oldest].modified = 1;
 	}
-	cash->sets[index_s].lines[oldest].age = 0; cash->sets[index_s].lines[oldest].valid = 1;
-	cash->sets[index_s].lines[oldest].modified = 0; cash->sets[index_s].lines[oldest].tag = tag_s;
 	if (*op == 'R')
 	    pass = 2;
 	else if (*op == 'W')
@@ -360,7 +404,7 @@ int main(int argc, char *argv[]) {
 	else if (flag == 2)
 	    readmiss++;
 	else if (flag == 3)
-	    writemiss++;	    
+	    writemiss++;		
     }
     
     // test example
